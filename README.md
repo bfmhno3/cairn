@@ -29,7 +29,7 @@ The posts live at <https://bfmhno3.github.io>.
 ```text
 bin/cairn          the executable
 lib/cairn/         libraries sourced by bin/cairn
-scripts/           chapter runner (chapter.sh)
+scripts/           chapter runner (chapter.sh), fixture generator (make_tree.sh)
 lab/chNN/          small lab scripts, one directory per chapter
 ```
 

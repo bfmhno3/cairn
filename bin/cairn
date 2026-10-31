@@ -15,6 +15,8 @@ readonly CAIRN_LIB
 
 # shellcheck source=../lib/cairn/log.sh
 source "${CAIRN_LIB}/log.sh"
+# shellcheck source=../lib/cairn/snapshot.sh
+source "${CAIRN_LIB}/snapshot.sh"
 
 #######################################
 # Print the usage text.
@@ -31,6 +33,8 @@ Options:
 
 Commands:
   help           same as --help
+  snapshot REPO SOURCE...
+                 copy the sources into REPO/snapshots/<name>
 USAGE
 }
 
@@ -54,6 +58,10 @@ main() {
       ;;
     --version)
       printf 'cairn %s\n' "${CAIRN_VERSION}"
+      ;;
+    snapshot)
+      shift
+      cairn::snapshot::create "$@"
       ;;
     *)
       cairn::log::err "unknown command '$1'"
