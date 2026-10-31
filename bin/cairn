@@ -9,12 +9,19 @@ set -o nounset
 
 readonly CAIRN_VERSION='0.1.0'
 
+# -c/--config 的值; 空表示未给出。
+CAIRN_CONFIG_OPT=''
+
 # 库目录: 环境变量优先, 否则相对于本脚本 (跟随符号链接) 的 ../lib/cairn。
 CAIRN_LIB="${CAIRN_LIB:-$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../lib/cairn}"
 readonly CAIRN_LIB
 
 # shellcheck source=../lib/cairn/log.sh
 source "${CAIRN_LIB}/log.sh"
+# shellcheck source=../lib/cairn/config.sh
+source "${CAIRN_LIB}/config.sh"
+# shellcheck source=../lib/cairn/repo.sh
+source "${CAIRN_LIB}/repo.sh"
 # shellcheck source=../lib/cairn/snapshot.sh
 source "${CAIRN_LIB}/snapshot.sh"
 
@@ -28,46 +35,142 @@ usage() {
 Usage: cairn [OPTIONS] COMMAND [ARGS]
 
 Options:
-  -h, --help     show this help and exit
-      --version  print the version and exit
+  -c, --config FILE  use FILE as the config file
+  -h, --help         show this help and exit
+      --version      print the version and exit
 
 Commands:
-  help           same as --help
-  snapshot REPO SOURCE...
-                 copy the sources into REPO/snapshots/<name>
+  help               same as --help
+  init REPO          create the repository REPO and a config file
+  snapshot           copy the configured sources into a new snapshot
+
+Config file: -c FILE, else $CAIRN_CONFIG, else
+${XDG_CONFIG_HOME:-$HOME/.config}/cairn/cairn.conf
 USAGE
+}
+
+#######################################
+# Report a usage error.
+# Arguments:
+#   Message text.
+# Returns:
+#   2, always.
+#######################################
+usage_error() {
+  cairn::log::err "$1"
+  cairn::log::err "run 'cairn --help' for usage"
+  return 2
+}
+
+#######################################
+# The init command: create the repository and, if needed, the config.
+# Arguments:
+#   Repository directory.
+# Outputs:
+#   Writes the config file when it does not exist yet.
+# Returns:
+#   0 on success, 1 on failure, 3 on a repository error.
+#######################################
+cmd_init() {
+  local dir
+  dir="$(cairn::repo::init "$1")" || return
+  if [[ -z "${dir}" ]]; then
+    return 0
+  fi
+  local config
+  config="$(cairn::config::path)" || return 1
+  if [[ -e "${config}" ]]; then
+    return 0
+  fi
+  mkdir -p -- "$(dirname -- "${config}")" || return 1
+  cairn::config::template "${dir}" >"${config}" || return 1
+  cairn::log::info "wrote ${config}"
+}
+
+#######################################
+# The snapshot command.
+# Arguments:
+#   None; "REPO SOURCE..." (two or more) selects the chapter 2 form.
+# Returns:
+#   Status of the snapshot, 2 on a usage error, 3 on a config error.
+#######################################
+cmd_snapshot() {
+  if (($# >= 2)); then
+    cairn::snapshot::create_adhoc "$@"
+    return
+  fi
+  if (($# == 1)); then
+    usage_error 'snapshot takes no arguments'
+    return
+  fi
+  cairn::config::load "$(cairn::config::path)" || return
+  cairn::snapshot::create
 }
 
 #######################################
 # Entry point.
 # Globals:
-#   CAIRN_VERSION
+#   CAIRN_VERSION, CAIRN_CONFIG_OPT
 # Arguments:
 #   Command line arguments.
 # Returns:
-#   0 on success, 2 on usage errors.
+#   0 on success, 2 on usage errors, 3 on config errors.
 #######################################
 main() {
   if (($# == 0)); then
     usage >&2
     return 2
   fi
-  case "$1" in
-    -h | --help | help)
-      usage
+  while (($# > 0)); do
+    case "$1" in
+      -h | --help)
+        usage
+        return 0
+        ;;
+      --version)
+        printf 'cairn %s\n' "${CAIRN_VERSION}"
+        return 0
+        ;;
+      -c | --config)
+        if (($# < 2)); then
+          usage_error "option '$1' requires an argument"
+          return
+        fi
+        CAIRN_CONFIG_OPT="$2"
+        shift 2
+        ;;
+      --config=*)
+        CAIRN_CONFIG_OPT="${1#--config=}"
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        usage_error "unknown option '$1'"
+        return
+        ;;
+      *) break ;;
+    esac
+  done
+  if (($# == 0)); then
+    usage >&2
+    return 2
+  fi
+  local command="$1"
+  shift
+  case "${command}" in
+    help) usage ;;
+    init)
+      if (($# != 1)); then
+        usage_error 'usage: cairn init REPO'
+        return
+      fi
+      cmd_init "$1"
       ;;
-    --version)
-      printf 'cairn %s\n' "${CAIRN_VERSION}"
-      ;;
-    snapshot)
-      shift
-      cairn::snapshot::create "$@"
-      ;;
-    *)
-      cairn::log::err "unknown command '$1'"
-      cairn::log::err "run 'cairn --help' for usage"
-      return 2
-      ;;
+    snapshot) cmd_snapshot "$@" ;;
+    *) usage_error "unknown command '${command}'" ;;
   esac
 }
 
