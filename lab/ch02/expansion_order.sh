@@ -4,7 +4,7 @@
 # The trace goes to a copy of stdout (fd 3, via BASH_XTRACEFD) so it
 # interleaves with the output of args.sh in order and is not captured by
 # $(...).
-# BAD: every probe below is deliberately unquoted.
+# BAD: most probes below are deliberately unquoted.
 # shellcheck disable=SC2016,SC2046,SC2116,SC2086,SC2035,SC2028,SC1001,SC2051
 exec 3>&1
 BASH_XTRACEFD=3
@@ -23,7 +23,7 @@ echo '--- 2 tilde expansion: ~/docs'
 set -x
 bash "${args}" ~/docs
 set +x
-echo '--- 3 parameter expansion: "${v}" ${v:-none}'
+echo '--- 3 parameter expansion: "${v}" "${v:-none}"'
 set -x
 bash "${args}" "${v}" "${v:-none}"
 set +x
