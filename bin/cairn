@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#
+# cairn: incremental hard-link snapshot backups, written in Bash.
+#
+# Usage: cairn [OPTIONS] COMMAND [ARGS]
+# Run `cairn --help` for the full text.
+
+set -o nounset
+
+readonly CAIRN_VERSION='0.1.0'
+
+# 库目录: 环境变量优先, 否则相对于本脚本 (跟随符号链接) 的 ../lib/cairn。
+CAIRN_LIB="${CAIRN_LIB:-$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../lib/cairn}"
+readonly CAIRN_LIB
+
+# shellcheck source=../lib/cairn/log.sh
+source "${CAIRN_LIB}/log.sh"
+
+#######################################
+# Print the usage text.
+# Outputs:
+#   Writes the text to stdout.
+#######################################
+usage() {
+  cat <<'USAGE'
+Usage: cairn [OPTIONS] COMMAND [ARGS]
+
+Options:
+  -h, --help     show this help and exit
+      --version  print the version and exit
+
+Commands:
+  help           same as --help
+USAGE
+}
+
+#######################################
+# Entry point.
+# Globals:
+#   CAIRN_VERSION
+# Arguments:
+#   Command line arguments.
+# Returns:
+#   0 on success, 2 on usage errors.
+#######################################
+main() {
+  if (($# == 0)); then
+    usage >&2
+    return 2
+  fi
+  case "$1" in
+    -h | --help | help)
+      usage
+      ;;
+    --version)
+      printf 'cairn %s\n' "${CAIRN_VERSION}"
+      ;;
+    *)
+      cairn::log::err "unknown command '$1'"
+      cairn::log::err "run 'cairn --help' for usage"
+      return 2
+      ;;
+  esac
+}
+
+main "$@"
