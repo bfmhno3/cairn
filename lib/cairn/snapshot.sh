@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Snapshot helpers for cairn. Library: sourced by bin/cairn, not executed.
 #
-# Chapter 3: a plain rsync copy driven by the config, no hard links yet.
+# Chapter 5: hard-link snapshots built in <name>.partial and renamed.
 
 #######################################
 # Print the name of a new snapshot.
@@ -25,33 +25,146 @@ cairn::snapshot::name() {
 }
 
 #######################################
-# Copy the configured sources into REPO/snapshots/<name> with rsync.
-# Globals:
-#   CAIRN_REPO, CAIRN_SOURCES, CAIRN_EXCLUDES
-# Outputs:
-#   Writes the snapshot name to stdout.
+# Remove an unfinished snapshot directory.
+# Arguments:
+#   Directory to remove (may be read-only, may not exist).
 # Returns:
-#   0 on success, 1 if the snapshot exists or rsync fails, 2 if
+#   0 on success, 1 if rm fails.
+#######################################
+cairn::snapshot::discard() {
+  chmod -R u+w -- "$1" 2>/dev/null
+  rm -rf -- "$1"
+}
+
+#######################################
+# Read the numbers cairn logs out of a saved rsync --stats report.
+#
+# Parses "Number of files: N (reg: R, dir: D, ...)" and "Total
+# transferred file size: N bytes"; thousands separators are removed.
+# Arguments:
+#   File that holds rsync's standard output.
+# Outputs:
+#   Writes "<regular files> <bytes transferred>" to stdout.
+#######################################
+cairn::snapshot::stats() {
+  local line
+  local files=0
+  local bytes=0
+  while IFS= read -r line; do
+    case "${line}" in
+      'Number of files: '*'reg: '*)
+        line="${line#*reg: }"
+        files="${line%%[^0-9,]*}"
+        files="${files//,/}"
+        ;;
+      'Total transferred file size: '*)
+        line="${line#*: }"
+        bytes="${line%% *}"
+        bytes="${bytes//,/}"
+        ;;
+    esac
+  done <"$1"
+  printf '%s %s\n' "${files}" "${bytes}"
+}
+
+#######################################
+# Create a snapshot of the configured sources with rsync.
+#
+# rsync writes into snapshots/<name>.partial, hard-linking unchanged
+# files to the latest snapshot (--link-dest). Only after rsync, the
+# manifest and the log line are done does mv rename the directory, and
+# the "latest" symlink is swapped with an atomic rename. With -n
+# (CAIRN_DRY_RUN=1) rsync runs with --dry-run and nothing is changed.
+# Globals:
+#   CAIRN_REPO, CAIRN_SOURCES, CAIRN_EXCLUDES, CAIRN_DRY_RUN,
+#   CAIRN_BWLIMIT (KiB/s, optional)
+# Outputs:
+#   Writes the snapshot name ("would create <name>" for -n) to stdout
+#   and a summary line to stderr.
+# Returns:
+#   0 on success, 1 if the snapshot exists or a step fails, 2 if
 #   CAIRN_NOW is malformed, 3 if the repository marker is missing.
 #######################################
 cairn::snapshot::create() {
   cairn::repo::check "${CAIRN_REPO}" || return
   local name
   name="$(TZ=UTC cairn::snapshot::name)" || return 2
-  local dest="${CAIRN_REPO}/snapshots/${name}"
-  if [[ -e "${dest}" ]]; then
+  local repo
+  repo="$(realpath -- "${CAIRN_REPO}")" || return 1
+  local final="${repo}/snapshots/${name}"
+  local partial="${final}.partial"
+  if [[ -e "${final}" ]]; then
     cairn::log::err "snapshot ${name} already exists"
     return 1
   fi
-  local -a rsync_args=(
-    --archive --relative
+
+  local -a rsync_args=(--archive --relative --delete --numeric-ids --stats)
+  local previous
+  if previous="$(cairn::repo::latest "${repo}")"; then
+    rsync_args+=("--link-dest=${repo}/snapshots/${previous}")
+  fi
+  if [[ -n "${CAIRN_BWLIMIT:-}" ]]; then
+    rsync_args+=("--bwlimit=${CAIRN_BWLIMIT}")
+  fi
+  if [[ "${CAIRN_DRY_RUN}" == 1 ]]; then
+    rsync_args+=(--dry-run)
+  fi
+  rsync_args+=(
     "${CAIRN_EXCLUDES[@]/#/--exclude=}"
-    -- "${CAIRN_SOURCES[@]}" "${dest}/"
+    -- "${CAIRN_SOURCES[@]}" "${partial}/"
   )
-  if ! rsync "${rsync_args[@]}"; then
-    cairn::log::err 'rsync failed'
+
+  # rsync 的 --stats 报告写进临时文件, 屏幕上只留它的警告和错误。
+  local stats_file
+  stats_file="$(mktemp)" || return 1
+  local start="${SECONDS}"
+  rsync "${rsync_args[@]}" >"${stats_file}"
+  local rc=$?
+
+  if ((rc == 24)); then
+    cairn::log::warn 'some files vanished during the snapshot'
+  elif ((rc != 0)); then
+    rm -f -- "${stats_file}"
+    if [[ "${CAIRN_DRY_RUN}" != 1 ]]; then
+      cairn::snapshot::discard "${partial}"
+      cairn::log::file ERROR snapshot "name=${name}" status=failed \
+        "rsync_exit=${rc}"
+    fi
+    cairn::log::err "rsync failed with exit ${rc}"
     return 1
   fi
+
+  local files bytes
+  read -r files bytes < <(cairn::snapshot::stats "${stats_file}")
+  rm -f -- "${stats_file}"
+
+  if [[ "${CAIRN_DRY_RUN}" == 1 ]]; then
+    printf 'would create %s\n' "${name}"
+    return 0
+  fi
+
+  if ! mv -T -- "${partial}" "${final}"; then
+    cairn::snapshot::discard "${partial}"
+    cairn::log::err "cannot rename ${name}.partial"
+    return 1
+  fi
+  if ! cairn::manifest::write "${repo}" "${name}"; then
+    cairn::log::file ERROR snapshot "name=${name}" status=failed
+    cairn::log::err "cannot write the manifest of ${name}"
+    return 1
+  fi
+  # 先建临时符号链接再 rename: latest 始终指向一个完整的快照。
+  if ! ln -sfn "snapshots/${name}" "${repo}/latest.tmp" \
+    || ! mv -T -- "${repo}/latest.tmp" "${repo}/latest"; then
+    cairn::log::err 'cannot update the latest link'
+    return 1
+  fi
+
+  local seconds=$((SECONDS - start))
+  cairn::log::file INFO snapshot "name=${name}" status=ok \
+    "files=${files}" "bytes=${bytes}" "seconds=${seconds}"
+  cairn::log::info "snapshot ${name}: ${files} files," \
+    "${bytes} bytes transferred in ${seconds} s"
   printf '%s\n' "${name}"
 }
 

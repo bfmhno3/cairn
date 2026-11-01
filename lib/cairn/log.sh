@@ -62,3 +62,23 @@ cairn::log::debug() {
   fi
   printf 'cairn: debug: %s\n' "$*" >&2
 }
+
+#######################################
+# Append one line to the repository log, logs/cairn.log.
+#
+# The line is "<timestamp> <LEVEL> <EVENT> <KEY=VALUE ...>", the
+# timestamp is ISO 8601 with a UTC offset.
+# Globals:
+#   CAIRN_REPO
+# Arguments:
+#   Level (INFO, ERROR), event name, then KEY=VALUE words.
+# Returns:
+#   0 on success, 1 if the log cannot be written.
+#######################################
+cairn::log::file() {
+  local level="$1"
+  local event="$2"
+  shift 2
+  printf '%(%Y-%m-%dT%H:%M:%S%z)T %s %s %s\n' -1 \
+    "${level}" "${event}" "$*" >>"${CAIRN_REPO}/logs/cairn.log"
+}

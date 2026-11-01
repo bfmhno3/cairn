@@ -16,10 +16,11 @@ for ((i = 0; i < 60; i++)); do
   CAIRN_NOW="${now}" cairn -c "${conf}" snapshot >/dev/null || exit 1
 done
 
-echo "before: $(cairn -c "${conf}" list | wc -l) snapshots"
+echo "before: $(cairn -c "${conf}" list | tail -n +2 | wc -l) snapshots"
 echo '--- cairn -v -n prune (first 20 lines) ---'
 cairn -c "${conf}" -v -n prune | head -n 20
-echo "after dry run: $(cairn -c "${conf}" list | wc -l) snapshots"
+echo "after dry run: $(cairn -c "${conf}" list | tail -n +2 | wc -l) snapshots"
 cairn -c "${conf}" prune | wc -l | xargs echo 'removed lines:'
-echo "after prune: $(cairn -c "${conf}" list | wc -l) snapshots"
-cairn -c "${conf}" list | head -n 3
+echo "after prune: $(cairn -c "${conf}" list | tail -n +2 | wc -l) snapshots"
+# list 从第 5 章起多一行表头。
+cairn -c "${conf}" list | head -n 4

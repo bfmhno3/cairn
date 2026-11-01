@@ -29,6 +29,8 @@ source "${CAIRN_LIB}/repo.sh"
 source "${CAIRN_LIB}/snapshot.sh"
 # shellcheck source=../lib/cairn/prune.sh
 source "${CAIRN_LIB}/prune.sh"
+# shellcheck source=../lib/cairn/manifest.sh
+source "${CAIRN_LIB}/manifest.sh"
 
 #######################################
 # Print the usage text.
@@ -41,7 +43,7 @@ Usage: cairn [OPTIONS] COMMAND [ARGS]
 
 Options:
   -c, --config FILE  use FILE as the config file
-  -n, --dry-run      show what prune would remove, delete nothing
+  -n, --dry-run      show what snapshot or prune would do, change nothing
   -v, --verbose      also show what is kept and debug messages
   -q, --quiet        suppress informational messages
   -h, --help         show this help and exit
@@ -52,7 +54,8 @@ Commands:
   help               same as --help
   init REPO          create the repository REPO and a config file
   snapshot           copy the configured sources into a new snapshot
-  list               print the snapshot names, oldest first
+  list               print each snapshot and its file count, oldest first
+  verify [NAME]      check a snapshot (default: latest) against its manifest
   prune              remove snapshots the retention policy no longer keeps
 
 Config file: -c FILE, else $CAIRN_CONFIG, else
@@ -129,7 +132,7 @@ load_repo() {
 }
 
 #######################################
-# The list command: print the snapshot names, oldest first.
+# The list command: print each snapshot with its file count.
 # Returns:
 #   0 on success, 2 on a usage error, 3 on a config error.
 #######################################
@@ -139,7 +142,36 @@ cmd_list() {
     return
   fi
   load_repo || return
-  cairn::repo::snapshots "${CAIRN_REPO}"
+  printf '%-18s %s\n' NAME FILES
+  local name count
+  while IFS= read -r name; do
+    count="$(cairn::manifest::count "${CAIRN_REPO}" "${name}")" || count='-'
+    printf '%-18s %8s\n' "${name}" "${count}"
+  done < <(cairn::repo::snapshots "${CAIRN_REPO}")
+}
+
+#######################################
+# The verify command: check a snapshot against its manifest.
+# Arguments:
+#   Optional snapshot name, default the latest.
+# Returns:
+#   0 if the snapshot is intact, 1 if not, 2 on a usage error,
+#   3 on a config error.
+#######################################
+cmd_verify() {
+  if (($# > 1)); then
+    usage_error 'usage: cairn verify [NAME]'
+    return
+  fi
+  load_repo || return
+  local name
+  if (($# == 1)); then
+    name="$1"
+  elif ! name="$(cairn::repo::latest "${CAIRN_REPO}")"; then
+    cairn::log::err 'no snapshots to verify'
+    return 1
+  fi
+  cairn::manifest::verify "${CAIRN_REPO}" "${name}"
 }
 
 #######################################
@@ -234,6 +266,7 @@ main() {
       ;;
     snapshot) cmd_snapshot "$@" ;;
     list) cmd_list "$@" ;;
+    verify) cmd_verify "$@" ;;
     prune) cmd_prune "$@" ;;
     *) usage_error "unknown command '${command}'" ;;
   esac
