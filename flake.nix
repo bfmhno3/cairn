@@ -18,6 +18,7 @@
         pkgs.mkShell {
           packages = with pkgs; [
             bashInteractive
+            bash-completion
             coreutils
             findutils
             diffutils
@@ -49,6 +50,7 @@
           ];
           shellHook = ''
             export CAIRN_BUSYBOX="${pkgs.busybox}/bin/busybox"
+            export CAIRN_BASH_COMPLETION="${pkgs.bash-completion}/share/bash-completion/bash_completion"
             export LOCALE_ARCHIVE="${pkgs.glibcLocales}/lib/locale/locale-archive"
             echo "cairn dev shell: $(bash --version | head -n 1), shellcheck $(shellcheck --version | sed -n 's/^version: //p'), shfmt $(shfmt --version), $(bats --version)"
           '';
