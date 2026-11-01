@@ -58,7 +58,7 @@ start_slow_snapshot() {
 # Wait until nobody holds the repository lock.
 #
 # rsync's helper processes inherit the lock descriptor and may outlive
-# cairn by a few milliseconds, so the lock is free slightly after cairn
+# cairn by about 100 ms, so the lock is free slightly after cairn
 # exited, not at the very instant.
 # Globals:
 #   REPO

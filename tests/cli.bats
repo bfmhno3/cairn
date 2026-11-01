@@ -55,13 +55,22 @@ load test_helper
 }
 
 @test "wrong argument count is a usage error for every command" {
-  local cmd
-  for cmd in 'init' 'init a b' 'diff only-one' 'list extra' \
-    'prune extra' 'report extra' 'verify a b'; do
+  local entry cmd msg
+  for entry in \
+    'init|usage: cairn init REPO' \
+    'init a b|usage: cairn init REPO' \
+    'snapshot extra|snapshot takes no arguments' \
+    'list extra|list takes no arguments' \
+    'prune extra|prune takes no arguments' \
+    'report extra|report takes no arguments' \
+    'verify a b|usage: cairn verify [NAME]'; do
+    cmd="${entry%%|*}"
+    msg="${entry#*|}"
     # 故意不加引号: 要把 $cmd 拆成多个参数。
     # shellcheck disable=SC2086
     run "${CAIRN}" ${cmd}
     assert_failure 2
+    assert_line -n 0 "cairn: error: ${msg}"
     assert_line -n 1 "cairn: error: run 'cairn --help' for usage"
   done
 }
