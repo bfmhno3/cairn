@@ -32,7 +32,7 @@ cairn::snapshot::name() {
 #   0 on success, 1 if rm fails.
 #######################################
 cairn::snapshot::discard() {
-  chmod -R u+w -- "$1" 2>/dev/null
+  find "$1" -type d -exec chmod u+w -- {} + 2>/dev/null
   rm -rf -- "$1"
 }
 

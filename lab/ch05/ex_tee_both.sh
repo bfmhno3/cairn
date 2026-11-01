@@ -14,7 +14,8 @@ noisy() {
   echo 'a line on stderr' >&2
 }
 
-tee_both "${LAB_TMP}/out.txt" "${LAB_TMP}/err.txt" noisy 2>"${LAB_TMP}/screen_err.txt"
+tee_both "${LAB_TMP}/out.txt" "${LAB_TMP}/err.txt" noisy \
+  2>"${LAB_TMP}/screen_err.txt"
 # 等 tee 进程把数据写完。
 sleep 0.3
 echo '--- out.txt ---'

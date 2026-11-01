@@ -26,7 +26,9 @@ cat "${LAB_TMP}/log_fd.txt"
 echo '--- inheritance: a child sees fd 3, a closed fd is gone ---'
 exec 3>"${LAB_TMP}/inherit.txt"
 bash -c 'echo "child writes to inherited fd 3" >&3'
-bash -c 'for n in 0 1 2 3; do [[ -e /proc/self/fd/${n} ]] && printf "%s " "${n}"; done; echo'
+bash -c 'for n in 0 1 2 3; do
+  [[ -e /proc/self/fd/${n} ]] && printf "%s " "${n}"
+done; echo'
 exec 3>&-
 bash -c 'echo "after closing: writing to fd 3" >&3' 2>&1 \
   | sed 's/^bash: line [0-9]*: /bash: /'

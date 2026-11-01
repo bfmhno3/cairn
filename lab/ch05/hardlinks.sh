@@ -54,10 +54,11 @@ both=$((rows[0] + rows[1]))
 echo "first:  ${rows[0]} bytes"
 echo "second: ${added} bytes (only what the first does not have)"
 echo "both together: ${both} bytes"
-printf 'second / first: %d.%d%%\n' "$((added * 100 / du_a))" \
-  "$((added * 1000 / du_a % 10))"
-printf 'both / (2 x first): %d.%d%%\n' "$((both * 100 / (2 * du_a)))" \
-  "$((both * 1000 / (2 * du_a) % 10))"
+# 以千分位整数运算四舍五入到一位小数。
+r1=$(((added * 1000 + du_a / 2) / du_a))
+printf 'second / first: %d.%d%%\n' "$((r1 / 10))" "$((r1 % 10))"
+r2=$(((both * 1000 + du_a) / (2 * du_a)))
+printf 'both / (2 x first): %d.%d%%\n' "$((r2 / 10))" "$((r2 % 10))"
 
 echo '--- cairn list ---'
 cairn -c "${conf}" list

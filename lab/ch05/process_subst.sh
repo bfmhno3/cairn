@@ -24,7 +24,8 @@ if diff <(ls "${LAB_TMP}/d") <(ls -r "${LAB_TMP}/d" | sort); then
 fi
 
 echo '--- >(cmd) is the output form ---'
-echo hello | tee >(tr '[:lower:]' '[:upper:]' >"${LAB_TMP}/upper.txt") >/dev/null
+echo hello \
+  | tee >(tr '[:lower:]' '[:upper:]' >"${LAB_TMP}/upper.txt") >/dev/null
 # 等后台的 tr 写完。
 sleep 0.2
 cat "${LAB_TMP}/upper.txt"

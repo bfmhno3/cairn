@@ -6,7 +6,8 @@ bash "${CAIRN_ROOT}/scripts/make_tree.sh" "${LAB_TMP}/tree" --big 200 \
   || exit 1
 cd "${LAB_TMP}/tree" || exit 1
 jobs="$(nproc)"
-echo "files: $(find . -type f | wc -l), nproc: ${jobs}"
+echo "regular files: $(find . -type f -print0 | tr -cd '\0' | wc -c)," \
+  "nproc: ${jobs}"
 
 hash_all() {
   find . -type f -print0 \
@@ -34,8 +35,18 @@ printf 'speedup: %d.%dx\n' "$((serial / parallel))" \
   "$((serial * 10 / parallel % 10))"
 
 echo '--- same hashes either way ---'
-a="$(find . -type f -print0 | xargs -0 -P 1 -n 4 sha256sum | LC_ALL=C sort -k 2 | sha256sum)"
-b="$(find . -type f -print0 | xargs -0 -P "${jobs}" -n 4 sha256sum | LC_ALL=C sort -k 2 | sha256sum)"
+a="$(
+  find . -type f -print0 \
+    | xargs -0 -P 1 -n 4 sha256sum \
+    | LC_ALL=C sort -k 2 \
+    | sha256sum
+)"
+b="$(
+  find . -type f -print0 \
+    | xargs -0 -P "${jobs}" -n 4 sha256sum \
+    | LC_ALL=C sort -k 2 \
+    | sha256sum
+)"
 if [[ "${a}" == "${b}" ]]; then
   echo 'manifests are identical after sort -k 2'
 else
