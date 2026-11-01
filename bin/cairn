@@ -12,6 +12,9 @@ readonly CAIRN_VERSION='0.1.0'
 # -c/--config 的值; 空表示未给出。
 CAIRN_CONFIG_OPT=''
 
+# -n/--dry-run 设为 1: 只报告, 不删除。
+CAIRN_DRY_RUN=0
+
 # 库目录: 环境变量优先, 否则相对于本脚本 (跟随符号链接) 的 ../lib/cairn。
 CAIRN_LIB="${CAIRN_LIB:-$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../lib/cairn}"
 readonly CAIRN_LIB
@@ -24,6 +27,8 @@ source "${CAIRN_LIB}/config.sh"
 source "${CAIRN_LIB}/repo.sh"
 # shellcheck source=../lib/cairn/snapshot.sh
 source "${CAIRN_LIB}/snapshot.sh"
+# shellcheck source=../lib/cairn/prune.sh
+source "${CAIRN_LIB}/prune.sh"
 
 #######################################
 # Print the usage text.
@@ -36,13 +41,19 @@ Usage: cairn [OPTIONS] COMMAND [ARGS]
 
 Options:
   -c, --config FILE  use FILE as the config file
+  -n, --dry-run      show what prune would remove, delete nothing
+  -v, --verbose      also show what is kept and debug messages
+  -q, --quiet        suppress informational messages
   -h, --help         show this help and exit
       --version      print the version and exit
+  --                 end of options
 
 Commands:
   help               same as --help
   init REPO          create the repository REPO and a config file
   snapshot           copy the configured sources into a new snapshot
+  list               print the snapshot names, oldest first
+  prune              remove snapshots the retention policy no longer keeps
 
 Config file: -c FILE, else $CAIRN_CONFIG, else
 ${XDG_CONFIG_HOME:-$HOME/.config}/cairn/cairn.conf
@@ -108,9 +119,49 @@ cmd_snapshot() {
 }
 
 #######################################
+# Load the config file and check the repository.
+# Returns:
+#   0 on success, 3 on a config or repository error.
+#######################################
+load_repo() {
+  cairn::config::load "$(cairn::config::path)" || return
+  cairn::repo::check "${CAIRN_REPO}"
+}
+
+#######################################
+# The list command: print the snapshot names, oldest first.
+# Returns:
+#   0 on success, 2 on a usage error, 3 on a config error.
+#######################################
+cmd_list() {
+  if (($# != 0)); then
+    usage_error 'list takes no arguments'
+    return
+  fi
+  load_repo || return
+  cairn::repo::snapshots "${CAIRN_REPO}"
+}
+
+#######################################
+# The prune command: apply the retention policy.
+# Returns:
+#   0 on success, 1 on a deletion failure, 2 on a usage error,
+#   3 on a config error.
+#######################################
+cmd_prune() {
+  if (($# != 0)); then
+    usage_error 'prune takes no arguments'
+    return
+  fi
+  load_repo || return
+  cairn::prune::run
+}
+
+#######################################
 # Entry point.
 # Globals:
-#   CAIRN_VERSION, CAIRN_CONFIG_OPT
+#   CAIRN_VERSION, CAIRN_CONFIG_OPT, CAIRN_DRY_RUN, CAIRN_VERBOSE,
+#   CAIRN_QUIET
 # Arguments:
 #   Command line arguments.
 # Returns:
@@ -130,6 +181,18 @@ main() {
       --version)
         printf 'cairn %s\n' "${CAIRN_VERSION}"
         return 0
+        ;;
+      -n | --dry-run)
+        CAIRN_DRY_RUN=1
+        shift
+        ;;
+      -v | --verbose)
+        CAIRN_VERBOSE=1
+        shift
+        ;;
+      -q | --quiet)
+        CAIRN_QUIET=1
+        shift
         ;;
       -c | --config)
         if (($# < 2)); then
@@ -170,6 +233,8 @@ main() {
       cmd_init "$1"
       ;;
     snapshot) cmd_snapshot "$@" ;;
+    list) cmd_list "$@" ;;
+    prune) cmd_prune "$@" ;;
     *) usage_error "unknown command '${command}'" ;;
   esac
 }

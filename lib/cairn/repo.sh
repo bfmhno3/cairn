@@ -55,3 +55,45 @@ cairn::repo::check() {
     return 3
   fi
 }
+
+#######################################
+# Print the snapshot names of a repository, oldest to newest.
+# Names are fixed-width UTC timestamps, so C-locale order is time order;
+# *.partial directories (unfinished snapshots) are skipped.
+# Arguments:
+#   Repository directory.
+# Outputs:
+#   Writes one name per line to stdout.
+#######################################
+cairn::repo::snapshots() {
+  local LC_COLLATE=C
+  local path name
+  for path in "$1"/snapshots/*; do
+    if [[ ! -d "${path}" ]]; then
+      continue
+    fi
+    name="${path##*/}"
+    if [[ "${name}" == *.partial ]]; then
+      continue
+    fi
+    printf '%s\n' "${name}"
+  done
+}
+
+#######################################
+# Print the name of the newest snapshot.
+# Arguments:
+#   Repository directory.
+# Outputs:
+#   Writes the name to stdout.
+# Returns:
+#   0 on success, 1 if the repository has no snapshot.
+#######################################
+cairn::repo::latest() {
+  local -a names
+  readarray -t names < <(cairn::repo::snapshots "$1")
+  if ((${#names[@]} == 0)); then
+    return 1
+  fi
+  printf '%s\n' "${names[-1]}"
+}
