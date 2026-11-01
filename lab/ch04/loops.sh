@@ -14,7 +14,7 @@ echo '--- while ---'
 n=3
 while ((n > 0)); do
   echo "n=${n}"
-  ((n -= 1))
+  n=$((n - 1))
 done
 
 echo '--- until ---'

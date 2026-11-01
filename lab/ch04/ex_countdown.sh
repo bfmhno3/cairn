@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 # Exercise solution: countdown N prints N down to 1, then "liftoff".
-# Rejects anything that is not a positive integer with status 2.
+# Rejects anything that is not a positive integer, or has a leading
+# zero (08 would be read as octal), with status 2.
 countdown() {
-  if [[ ! "$1" =~ ^[0-9]+$ ]] || (($1 < 1)); then
+  if [[ ! "$1" =~ ^[1-9][0-9]*$ ]]; then
     echo "countdown: not a positive integer: $1" >&2
     return 2
   fi

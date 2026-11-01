@@ -16,6 +16,7 @@ echo "\$((010))            = $((010))  (octal)"
 echo "\$((10#08))          = $((10#08))  (forced decimal)"
 
 i=0
+# BAD: ((i++)) is 0 when i is 0, so its status is 1 (fatal under set -e).
 ((i++))
 echo "((i++)) with i=0 returned status $? (the value 0 is 'false')"
 echo "i is now ${i}"
