@@ -87,6 +87,21 @@ setup() {
   assert_file_exist "${REPO}/manifests/20261030T090000Z.sha256"
 }
 
+@test "prune logs one INFO line per removed snapshot, none on -n" {
+  write_config 'keep_last = 1' 'keep_daily = 0' 'keep_weekly = 0'
+  make_snapshots 20261029T090000Z 20261030T090000Z 20261031T090000Z
+  run "${CAIRN}" -n prune
+  assert_success
+  run grep -c ' INFO prune ' "${REPO}/logs/cairn.log"
+  assert_output 0
+  run "${CAIRN}" prune
+  assert_success
+  run grep ' INFO prune ' "${REPO}/logs/cairn.log"
+  assert_line -n 0 --regexp ' INFO prune removed=20261030T090000Z$'
+  assert_line -n 1 --regexp ' INFO prune removed=20261029T090000Z$'
+  assert_equal "${#lines[@]}" 2
+}
+
 @test "prune -n lists what it would remove and deletes nothing" {
   write_config 'keep_last = 1' 'keep_daily = 0' 'keep_weekly = 0'
   make_snapshots 20261030T090000Z 20261031T090000Z

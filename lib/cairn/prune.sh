@@ -109,6 +109,7 @@ cairn::prune::run() {
           printf 'would remove %s\n' "${name}"
         elif cairn::prune::remove "${name}"; then
           printf 'removed %s\n' "${name}"
+          cairn::log::file INFO prune "removed=${name}"
         else
           cairn::log::err "cannot remove ${name}"
           status=1
