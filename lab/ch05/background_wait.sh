@@ -35,13 +35,16 @@ wait $!
 echo "status: $?"
 
 echo '--- wait -n: first to finish ---'
-sleep 0.6 &
-slow=$!
-sleep 0.1 &
-fast=$!
-wait -n -p done_pid
-if [[ "${done_pid}" == "${fast}" ]]; then
-  echo 'wait -n returned the short job first'
-fi
-wait "${slow}"
-echo "slow job finished too: $?"
+# 放进子 shell: 前面的 wait 已经收走过别的作业，wait -n 会拿到旧的结果。
+(
+  sleep 0.6 &
+  slow=$!
+  sleep 0.1 &
+  fast=$!
+  wait -n -p done_pid
+  if [[ "${done_pid}" == "${fast}" ]]; then
+    echo 'wait -n returned the short job first'
+  fi
+  wait "${slow}"
+  echo "slow job finished too: $?"
+)

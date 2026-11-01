@@ -13,7 +13,9 @@ printf 'source = %s\n' "${src}" >>"${conf}"
 
 first="$(CAIRN_NOW=20261031T090000Z cairn -q -c "${conf}" snapshot)" \
   || exit 1
-# 只改一个 1 MiB 的文件。
+# 只改一个 1 MiB 的文件。大小不变时 rsync 靠 mtime 判断，
+# 所以先让 mtime 越过当前这一秒。
+sleep 1.1
 head -c 1048576 /dev/urandom >"${src}/big/file_025.bin"
 second="$(CAIRN_NOW=20261031T100000Z cairn -q -c "${conf}" snapshot)" \
   || exit 1
