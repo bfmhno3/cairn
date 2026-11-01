@@ -2,6 +2,13 @@
 # Snapshot helpers for cairn. Library: sourced by bin/cairn, not executed.
 #
 # Chapter 5: hard-link snapshots built in <name>.partial and renamed.
+# Chapter 7: repository lock, stale partials, signal handling.
+
+# create 运行期间的状态, 供 INT/TERM/EXIT 的 trap 使用; 空表示没有。
+CAIRN_SNAP_NAME=''
+CAIRN_SNAP_PARTIAL=''
+CAIRN_SNAP_STATS=''
+CAIRN_SNAP_CHILD=''
 
 #######################################
 # Print the name of a new snapshot.
@@ -32,8 +39,75 @@ cairn::snapshot::name() {
 #   0 on success, 1 if rm fails.
 #######################################
 cairn::snapshot::discard() {
-  find "$1" -type d -exec chmod u+w -- {} + 2>/dev/null
+  # find 在目录不存在时返回 1, 那正是没有东西可删, 不算错误。
+  find "$1" -type d -exec chmod u+w -- {} + 2>/dev/null || :
   rm -rf -- "$1"
+}
+
+#######################################
+# Remove the unfinished snapshots a killed cairn left behind.
+#
+# Only called with the repository lock held, so no running cairn can
+# still be writing into one of them.
+# Arguments:
+#   Absolute repository directory.
+# Outputs:
+#   Writes a warning per removed directory to stderr.
+#######################################
+cairn::snapshot::remove_stale() {
+  local path
+  for path in "$1"/snapshots/*.partial; do
+    if [[ ! -d "${path}" ]]; then
+      continue
+    fi
+    cairn::log::warn "removing stale ${path##*/}"
+    cairn::snapshot::discard "${path}"
+  done
+}
+
+#######################################
+# EXIT trap of create: remove what a failed or interrupted run left.
+# Globals:
+#   CAIRN_SNAP_PARTIAL, CAIRN_SNAP_STATS
+#######################################
+cairn::snapshot::cleanup() {
+  if [[ -n "${CAIRN_SNAP_STATS}" ]]; then
+    rm -f -- "${CAIRN_SNAP_STATS}"
+    CAIRN_SNAP_STATS=''
+  fi
+  if [[ -n "${CAIRN_SNAP_PARTIAL}" ]]; then
+    cairn::snapshot::discard "${CAIRN_SNAP_PARTIAL}"
+    CAIRN_SNAP_PARTIAL=''
+  fi
+}
+
+#######################################
+# INT/TERM trap of create: stop rsync, clean up, log, exit.
+#
+# The trap runs at once because create waits for rsync with the wait
+# builtin. Further signals are ignored while it cleans up.
+# Globals:
+#   CAIRN_SNAP_NAME, CAIRN_SNAP_PARTIAL, CAIRN_SNAP_CHILD
+# Arguments:
+#   Exit status: 130 for SIGINT, 143 for SIGTERM.
+# Outputs:
+#   Appends a status=interrupted line to the log.
+#######################################
+cairn::snapshot::interrupt() {
+  local code="$1"
+  trap '' INT TERM
+  if [[ -n "${CAIRN_SNAP_CHILD}" ]]; then
+    kill -TERM "${CAIRN_SNAP_CHILD}" 2>/dev/null || :
+    wait "${CAIRN_SNAP_CHILD}" 2>/dev/null || :
+    CAIRN_SNAP_CHILD=''
+  fi
+  if [[ -n "${CAIRN_SNAP_PARTIAL}" ]]; then
+    cairn::log::warn "interrupted, removing ${CAIRN_SNAP_NAME}.partial"
+    cairn::log::file WARN snapshot "name=${CAIRN_SNAP_NAME}" \
+      status=interrupted
+  fi
+  cairn::snapshot::cleanup
+  exit "${code}"
 }
 
 #######################################
@@ -75,6 +149,11 @@ cairn::snapshot::stats() {
 # manifest and the log line are done does mv rename the directory, and
 # the "latest" symlink is swapped with an atomic rename. With -n
 # (CAIRN_DRY_RUN=1) rsync runs with --dry-run and nothing is changed.
+#
+# The repository lock is taken first, then stale *.partial directories
+# of a killed run are removed. rsync runs in the background and create
+# waits for it, so the INT and TERM traps run at once; the EXIT trap
+# removes the partial and the temporary file after any other failure.
 # Globals:
 #   CAIRN_REPO, CAIRN_SOURCES, CAIRN_EXCLUDES, CAIRN_DRY_RUN,
 #   CAIRN_BWLIMIT (KiB/s, optional)
@@ -83,14 +162,20 @@ cairn::snapshot::stats() {
 #   and a summary line to stderr.
 # Returns:
 #   0 on success, 1 if the snapshot exists or a step fails, 2 if
-#   CAIRN_NOW is malformed, 3 if the repository marker is missing.
+#   CAIRN_NOW is malformed, 3 if the repository marker is missing, 4 if
+#   another cairn holds the repository lock. SIGINT and SIGTERM end the
+#   process with 130 and 143.
 #######################################
 cairn::snapshot::create() {
   cairn::repo::check "${CAIRN_REPO}" || return
-  local name
-  name="$(TZ=UTC cairn::snapshot::name)" || return 2
   local repo
   repo="$(realpath -- "${CAIRN_REPO}")" || return 1
+  cairn::lock::acquire "${repo}" || return
+  if [[ "${CAIRN_DRY_RUN}" != 1 ]]; then
+    cairn::snapshot::remove_stale "${repo}"
+  fi
+  local name
+  name="$(TZ=UTC cairn::snapshot::name)" || return 2
   local final="${repo}/snapshots/${name}"
   local partial="${final}.partial"
   if [[ -e "${final}" ]]; then
@@ -114,12 +199,25 @@ cairn::snapshot::create() {
     -- "${CAIRN_SOURCES[@]}" "${partial}/"
   )
 
+  # 先装好 trap, 再创建临时文件和 partial 目录: 之后任何一种退出都会清理。
+  CAIRN_SNAP_NAME="${name}"
+  trap 'cairn::snapshot::interrupt 130' INT
+  trap 'cairn::snapshot::interrupt 143' TERM
+  trap cairn::snapshot::cleanup EXIT
+  if [[ "${CAIRN_DRY_RUN}" != 1 ]]; then
+    CAIRN_SNAP_PARTIAL="${partial}"
+  fi
   # rsync 的 --stats 报告写进临时文件, 屏幕上只留它的警告和错误。
   local stats_file
   stats_file="$(mktemp)" || return 1
+  CAIRN_SNAP_STATS="${stats_file}"
   local start="${SECONDS}"
-  rsync "${rsync_args[@]}" >"${stats_file}"
-  local rc=$?
+  # 放到后台再 wait: 前台子进程运行时 trap 要等它结束, wait 则立即响应。
+  rsync "${rsync_args[@]}" >"${stats_file}" &
+  CAIRN_SNAP_CHILD=$!
+  local rc=0
+  wait "${CAIRN_SNAP_CHILD}" || rc=$?
+  CAIRN_SNAP_CHILD=''
 
   if ((rc == 24)); then
     cairn::log::warn 'some files vanished during the snapshot'
@@ -127,6 +225,7 @@ cairn::snapshot::create() {
     rm -f -- "${stats_file}"
     if [[ "${CAIRN_DRY_RUN}" != 1 ]]; then
       cairn::snapshot::discard "${partial}"
+      CAIRN_SNAP_PARTIAL=''
       cairn::log::file ERROR snapshot "name=${name}" status=failed \
         "rsync_exit=${rc}"
     fi
@@ -145,9 +244,11 @@ cairn::snapshot::create() {
 
   if ! mv -T -- "${partial}" "${final}"; then
     cairn::snapshot::discard "${partial}"
+    CAIRN_SNAP_PARTIAL=''
     cairn::log::err "cannot rename ${name}.partial"
     return 1
   fi
+  CAIRN_SNAP_PARTIAL=''
   if ! cairn::manifest::write "${repo}" "${name}"; then
     cairn::log::file ERROR snapshot "name=${name}" status=failed
     cairn::log::err "cannot write the manifest of ${name}"

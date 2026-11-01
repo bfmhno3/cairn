@@ -83,10 +83,11 @@ cairn::prune::week() {
 #   (<reason>)".
 # Returns:
 #   0 on success, 1 if a deletion fails, 3 if CAIRN_REPO is not a
-#   repository.
+#   repository, 4 if another cairn holds the repository lock.
 #######################################
 cairn::prune::run() {
   cairn::repo::check "${CAIRN_REPO}" || return
+  cairn::lock::acquire "${CAIRN_REPO}" || return
   local -a names decisions
   readarray -t names < <(cairn::repo::snapshots "${CAIRN_REPO}")
   readarray -t decisions < <(

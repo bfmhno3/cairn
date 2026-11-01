@@ -5,7 +5,10 @@
 # Usage: cairn [OPTIONS] COMMAND [ARGS]
 # Run `cairn --help` for the full text.
 
-set -o nounset
+set -o errexit -o nounset -o pipefail
+# 命令替换里的失败也要让 errexit 生效; errtrace 让 ERR trap 进入函数和子 shell。
+shopt -s inherit_errexit
+set -o errtrace
 
 readonly CAIRN_VERSION='0.1.0'
 
@@ -16,7 +19,8 @@ CAIRN_CONFIG_OPT=''
 CAIRN_DRY_RUN=0
 
 # 库目录: 环境变量优先, 否则相对于本脚本 (跟随符号链接) 的 ../lib/cairn。
-CAIRN_LIB="${CAIRN_LIB:-$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../lib/cairn}"
+cairn_script="$(readlink -f -- "${BASH_SOURCE[0]}")"
+CAIRN_LIB="${CAIRN_LIB:-$(dirname -- "${cairn_script}")/../lib/cairn}"
 readonly CAIRN_LIB
 
 # shellcheck source=../lib/cairn/log.sh
@@ -31,6 +35,8 @@ source "${CAIRN_LIB}/snapshot.sh"
 source "${CAIRN_LIB}/prune.sh"
 # shellcheck source=../lib/cairn/manifest.sh
 source "${CAIRN_LIB}/manifest.sh"
+# shellcheck source=../lib/cairn/lock.sh
+source "${CAIRN_LIB}/lock.sh"
 
 #######################################
 # Print the usage text.
@@ -59,6 +65,15 @@ Commands:
   diff OLD NEW       list files added (A), deleted (D) or modified (M)
   prune              remove snapshots the retention policy no longer keeps
   report             summarise logs/cairn.log: counts, bytes, per day
+
+Exit codes:
+  0    success
+  1    runtime failure
+  2    usage error
+  3    config or repository error
+  4    another cairn holds the repository lock
+  130  interrupted (SIGINT)
+  143  terminated (SIGTERM)
 
 Config file: -c FILE, else $CAIRN_CONFIG, else
 ${XDG_CONFIG_HOME:-$HOME/.config}/cairn/cairn.conf
@@ -116,8 +131,7 @@ cmd_snapshot() {
     return
   fi
   if (($# == 1)); then
-    usage_error 'snapshot takes no arguments'
-    return
+    usage_error 'snapshot takes no arguments' || return
   fi
   cairn::config::load "$(cairn::config::path)" || return
   cairn::snapshot::create
@@ -141,8 +155,7 @@ load_repo() {
 #######################################
 cmd_list() {
   if (($# != 0)); then
-    usage_error 'list takes no arguments'
-    return
+    usage_error 'list takes no arguments' || return
   fi
   load_repo || return
   local -a names sizes
@@ -171,8 +184,7 @@ cmd_list() {
 #######################################
 cmd_verify() {
   if (($# > 1)); then
-    usage_error 'usage: cairn verify [NAME]'
-    return
+    usage_error 'usage: cairn verify [NAME]' || return
   fi
   load_repo || return
   local name
@@ -193,8 +205,7 @@ cmd_verify() {
 #######################################
 cmd_prune() {
   if (($# != 0)); then
-    usage_error 'prune takes no arguments'
-    return
+    usage_error 'prune takes no arguments' || return
   fi
   load_repo || return
   cairn::prune::run
@@ -210,8 +221,7 @@ cmd_prune() {
 #######################################
 cmd_diff() {
   if (($# != 2)); then
-    usage_error 'usage: cairn diff OLD NEW'
-    return
+    usage_error 'usage: cairn diff OLD NEW' || return
   fi
   load_repo || return
   cairn::manifest::diff "${CAIRN_REPO}" "$1" "$2"
@@ -229,8 +239,7 @@ cmd_diff() {
 #######################################
 cmd_report() {
   if (($# != 0)); then
-    usage_error 'report takes no arguments'
-    return
+    usage_error 'report takes no arguments' || return
   fi
   load_repo || return
   local log="${CAIRN_REPO}/logs/cairn.log"
@@ -238,6 +247,38 @@ cmd_report() {
     log=/dev/null
   fi
   awk -f "${CAIRN_LIB}/report.awk" "${log}"
+}
+
+#######################################
+# ERR trap handler: report a command that failed unexpectedly.
+#
+# Failing function calls and "return" are not reported: either a command
+# inside the function failed (and the trap already ran there), or the
+# function ended with a deliberate "return N", which main turns into the
+# exit status. With -v one line per call frame follows, innermost first.
+# Globals:
+#   CAIRN_VERBOSE, FUNCNAME, BASH_SOURCE, BASH_LINENO
+# Arguments:
+#   Exit status of the failed command, the command text.
+# Outputs:
+#   Writes the message and the frames to stderr.
+#######################################
+on_err() {
+  local status="$1"
+  local command="$2"
+  if [[ "${command%% *}" == return ]] \
+    || declare -F -- "${command%% *}" >/dev/null; then
+    return 0
+  fi
+  cairn::log::err "command failed (exit ${status}): ${command}"
+  if [[ "${CAIRN_VERBOSE}" != 1 ]]; then
+    return 0
+  fi
+  local i
+  for ((i = 1; i < ${#FUNCNAME[@]}; i++)); do
+    printf '  at %s (%s:%s)\n' \
+      "${FUNCNAME[i]}" "${BASH_SOURCE[i]}" "${BASH_LINENO[i - 1]}" >&2
+  done
 }
 
 #######################################
@@ -279,8 +320,7 @@ main() {
         ;;
       -c | --config)
         if (($# < 2)); then
-          usage_error "option '$1' requires an argument"
-          return
+          usage_error "option '$1' requires an argument" || return
         fi
         CAIRN_CONFIG_OPT="$2"
         shift 2
@@ -294,8 +334,7 @@ main() {
         break
         ;;
       -*)
-        usage_error "unknown option '$1'"
-        return
+        usage_error "unknown option '$1'" || return
         ;;
       *) break ;;
     esac
@@ -310,8 +349,7 @@ main() {
     help) usage ;;
     init)
       if (($# != 1)); then
-        usage_error 'usage: cairn init REPO'
-        return
+        usage_error 'usage: cairn init REPO' || return
       fi
       cmd_init "$1"
       ;;
@@ -321,8 +359,9 @@ main() {
     diff) cmd_diff "$@" ;;
     prune) cmd_prune "$@" ;;
     report) cmd_report "$@" ;;
-    *) usage_error "unknown command '${command}'" ;;
+    *) usage_error "unknown command '${command}'" || return ;;
   esac
 }
 
+trap 'on_err "$?" "${BASH_COMMAND}"' ERR
 main "$@"

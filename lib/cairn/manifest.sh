@@ -24,17 +24,14 @@ cairn::manifest::write() {
   local out="${repo}/manifests/${name}.sha256"
   local tmp="${out}.tmp"
   local jobs="${CAIRN_JOBS:-$(nproc)}"
-  (
-    # 子 shell 里的管道没有 PIPESTATUS 可传出来, 用 pipefail 压成一个状态。
-    set -o pipefail
+  # pipefail 是全局开着的; 放进 if 条件, 失败时才能先清理再返回。
+  if ! (
     cd -- "${dir}" || exit 1
     find . -type f -print0 \
       | LC_ALL=C sort -z \
       | xargs -0 -r -P "${jobs}" -n 64 sha256sum
   ) \
-    | LC_ALL=C sort -k 2 >"${tmp}"
-  local -a status=("${PIPESTATUS[@]}")
-  if ((status[0] != 0 || status[1] != 0)); then
+    | LC_ALL=C sort -k 2 >"${tmp}"; then
     rm -f -- "${tmp}"
     return 1
   fi
@@ -122,11 +119,9 @@ cairn::manifest::diff() {
       return 1
     fi
   done
-  LC_ALL=C awk -f "${CAIRN_LIB}/diff.awk" \
+  if ! LC_ALL=C awk -f "${CAIRN_LIB}/diff.awk" \
     "${repo}/manifests/$2.sha256" "${repo}/manifests/$3.sha256" \
-    | LC_ALL=C sort -k 2
-  local -a status=("${PIPESTATUS[@]}")
-  if ((status[0] != 0 || status[1] != 0)); then
+    | LC_ALL=C sort -k 2; then
     return 1
   fi
 }

@@ -123,9 +123,7 @@ cairn::repo::sizes() {
   fi
   local usage
   usage="$(du -s --block-size=1 -- "${dirs[@]}")" || return 1
-  cut -f 1 <<<"${usage}" | numfmt --to=iec
-  local -a status=("${PIPESTATUS[@]}")
-  if ((status[0] != 0 || status[1] != 0)); then
+  if ! cut -f 1 <<<"${usage}" | numfmt --to=iec; then
     return 1
   fi
 }
