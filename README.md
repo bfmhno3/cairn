@@ -27,8 +27,9 @@ The posts live at <https://bfmhno3.github.io>.
 ## Layout
 
 ```text
-bin/cairn          the executable
-lib/cairn/         libraries sourced by bin/cairn (log, config, repo, snapshot, manifest, prune)
+bin/cairn           the executable
+lib/cairn/*.sh     libraries sourced by bin/cairn (log, config, repo, snapshot, manifest, prune)
+lib/cairn/*.awk    awk programs run with awk -f (report.awk for `cairn report`, diff.awk for `cairn diff`)
 scripts/           chapter runner (chapter.sh), fixture generator (make_tree.sh)
 lab/chNN/          small lab scripts, one directory per chapter
 ```

@@ -54,9 +54,11 @@ Commands:
   help               same as --help
   init REPO          create the repository REPO and a config file
   snapshot           copy the configured sources into a new snapshot
-  list               print each snapshot and its file count, oldest first
+  list               print each snapshot with file count and size, oldest first
   verify [NAME]      check a snapshot (default: latest) against its manifest
+  diff OLD NEW       list files added (A), deleted (D) or modified (M)
   prune              remove snapshots the retention policy no longer keeps
+  report             summarise logs/cairn.log: counts, bytes, per day
 
 Config file: -c FILE, else $CAIRN_CONFIG, else
 ${XDG_CONFIG_HOME:-$HOME/.config}/cairn/cairn.conf
@@ -132,9 +134,10 @@ load_repo() {
 }
 
 #######################################
-# The list command: print each snapshot with its file count.
+# The list command: print each snapshot with file count and size.
 # Returns:
-#   0 on success, 2 on a usage error, 3 on a config error.
+#   0 on success, 1 if sizes cannot be computed, 2 on a usage error,
+#   3 on a config error.
 #######################################
 cmd_list() {
   if (($# != 0)); then
@@ -142,12 +145,20 @@ cmd_list() {
     return
   fi
   load_repo || return
-  printf '%-18s %s\n' NAME FILES
-  local name count
-  while IFS= read -r name; do
-    count="$(cairn::manifest::count "${CAIRN_REPO}" "${name}")" || count='-'
-    printf '%-18s %8s\n' "${name}" "${count}"
-  done < <(cairn::repo::snapshots "${CAIRN_REPO}")
+  local -a names sizes
+  readarray -t names < <(cairn::repo::snapshots "${CAIRN_REPO}")
+  readarray -t sizes < <(cairn::repo::sizes "${CAIRN_REPO}")
+  if ((${#names[@]} != ${#sizes[@]})); then
+    cairn::log::err 'cannot compute the snapshot sizes'
+    return 1
+  fi
+  printf 'NAME               FILES     SIZE\n'
+  local i count
+  for ((i = 0; i < ${#names[@]}; i++)); do
+    count="$(cairn::manifest::count "${CAIRN_REPO}" "${names[i]}")" \
+      || count='-'
+    printf '%-18s %8s %8s\n' "${names[i]}" "${count}" "${sizes[i]}"
+  done
 }
 
 #######################################
@@ -187,6 +198,46 @@ cmd_prune() {
   fi
   load_repo || return
   cairn::prune::run
+}
+
+#######################################
+# The diff command: compare the manifests of two snapshots.
+# Arguments:
+#   Old and new snapshot name.
+# Returns:
+#   0 on success (also when they differ), 1 on an unknown snapshot,
+#   2 on a usage error, 3 on a config error.
+#######################################
+cmd_diff() {
+  if (($# != 2)); then
+    usage_error 'usage: cairn diff OLD NEW'
+    return
+  fi
+  load_repo || return
+  cairn::manifest::diff "${CAIRN_REPO}" "$1" "$2"
+}
+
+#######################################
+# The report command: summarise the repository log.
+# Globals:
+#   CAIRN_LIB, CAIRN_REPO
+# Outputs:
+#   Writes the report to stdout; a missing log reads as empty.
+# Returns:
+#   0 on success, 1 if awk fails, 2 on a usage error, 3 on a config
+#   error.
+#######################################
+cmd_report() {
+  if (($# != 0)); then
+    usage_error 'report takes no arguments'
+    return
+  fi
+  load_repo || return
+  local log="${CAIRN_REPO}/logs/cairn.log"
+  if [[ ! -f "${log}" ]]; then
+    log=/dev/null
+  fi
+  awk -f "${CAIRN_LIB}/report.awk" "${log}"
 }
 
 #######################################
@@ -267,7 +318,9 @@ main() {
     snapshot) cmd_snapshot "$@" ;;
     list) cmd_list "$@" ;;
     verify) cmd_verify "$@" ;;
+    diff) cmd_diff "$@" ;;
     prune) cmd_prune "$@" ;;
+    report) cmd_report "$@" ;;
     *) usage_error "unknown command '${command}'" ;;
   esac
 }

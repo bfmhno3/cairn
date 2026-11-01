@@ -97,3 +97,35 @@ cairn::repo::latest() {
   fi
   printf '%s\n' "${names[-1]}"
 }
+
+#######################################
+# Print the disk space each snapshot added, oldest to newest.
+#
+# One du call sees all snapshot directories, so a hard-linked file is
+# counted only for the first snapshot that holds it; each row is the
+# space that snapshot added. numfmt turns the byte counts into 1024-based
+# units (1.5K, 20M).
+# Arguments:
+#   Repository directory.
+# Outputs:
+#   Writes one size per snapshot to stdout, in snapshot order.
+# Returns:
+#   0 on success, 1 if du or numfmt fails.
+#######################################
+cairn::repo::sizes() {
+  local -a dirs
+  local name
+  while IFS= read -r name; do
+    dirs+=("$1/snapshots/${name}")
+  done < <(cairn::repo::snapshots "$1")
+  if ((${#dirs[@]} == 0)); then
+    return 0
+  fi
+  local usage
+  usage="$(du -s --block-size=1 -- "${dirs[@]}")" || return 1
+  cut -f 1 <<<"${usage}" | numfmt --to=iec
+  local -a status=("${PIPESTATUS[@]}")
+  if ((status[0] != 0 || status[1] != 0)); then
+    return 1
+  fi
+}

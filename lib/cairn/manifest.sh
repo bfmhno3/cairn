@@ -92,3 +92,41 @@ cairn::manifest::verify() {
   count="$(cairn::manifest::count "${repo}" "${name}")" || return 1
   printf 'ok %s (%s files)\n' "${name}" "${count}"
 }
+
+#######################################
+# Compare the manifests of two snapshots.
+#
+# lib/cairn/diff.awk does the comparison; the lines are then sorted by
+# path in the C locale so that the order does not depend on the user's
+# locale.
+# Globals:
+#   CAIRN_LIB
+# Arguments:
+#   Repository directory, old snapshot name, new snapshot name.
+# Outputs:
+#   Writes "A <path>", "D <path>" and "M <path>" lines to stdout.
+# Returns:
+#   0 on success (also when the snapshots differ), 1 on an unknown
+#   snapshot, a missing manifest or a failing command.
+#######################################
+cairn::manifest::diff() {
+  local repo="$1"
+  local name
+  for name in "$2" "$3"; do
+    if [[ ! -d "${repo}/snapshots/${name}" ]]; then
+      cairn::log::err "no snapshot named ${name}"
+      return 1
+    fi
+    if [[ ! -f "${repo}/manifests/${name}.sha256" ]]; then
+      cairn::log::err "no manifest for ${name}"
+      return 1
+    fi
+  done
+  LC_ALL=C awk -f "${CAIRN_LIB}/diff.awk" \
+    "${repo}/manifests/$2.sha256" "${repo}/manifests/$3.sha256" \
+    | LC_ALL=C sort -k 2
+  local -a status=("${PIPESTATUS[@]}")
+  if ((status[0] != 0 || status[1] != 0)); then
+    return 1
+  fi
+}
