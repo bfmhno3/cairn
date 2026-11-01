@@ -30,6 +30,7 @@ The posts live at <https://bfmhno3.github.io>.
 bin/cairn           the executable
 lib/cairn/*.sh     libraries sourced by bin/cairn (log, config, repo, snapshot, manifest, prune, lock)
 lib/cairn/*.awk    awk programs run with awk -f (report.awk for `cairn report`, diff.awk for `cairn diff`)
+completions/      bash completion for cairn (cairn.bash)
 scripts/           chapter runner (chapter.sh), fixture generator (make_tree.sh)
 tests/            bats suite (`*.bats`) and its helper (test_helper.bash)
 contrib/systemd/  user units: cairn.service and cairn.timer (daily snapshot and prune)
@@ -57,6 +58,26 @@ make test      # bats suite, one job per CPU (needs GNU parallel)
 make coverage  # kcov line coverage of bin/ and lib/ into out/coverage
 make ci        # lint + every chapter + test
 ```
+
+## Shell completion
+
+`completions/cairn.bash` completes the options and commands of `cairn`, config files after `-c`/`--config`, directories
+after `init`, and snapshot names after `verify` and `diff` (read from `cairn list`, using the `-c` file of the command
+line if there is one). It needs bash itself, not the bash-completion package. Pick one way to enable it:
+
+```bash
+# for the current shell only
+source completions/cairn.bash
+
+# in every interactive shell: put this line in ~/.bashrc
+source /path/to/cairn/completions/cairn.bash
+
+# loaded on demand by bash-completion, the first time you press TAB after `cairn`
+mkdir -p ~/.local/share/bash-completion/completions
+ln -s /path/to/cairn/completions/cairn.bash ~/.local/share/bash-completion/completions/cairn
+```
+
+`cairn` has to be on `PATH` for the snapshot names to work. The tests are in `tests/completion.bats`.
 
 ## License
 
