@@ -40,7 +40,8 @@ EXPECTED
   assert_line -n 3 'interrupted  0'
   # 后两个快照全部硬链接到第一个, 传输的字节数是 0。
   assert_line -n 4 'bytes        49'
-  assert_line -n 5 'seconds      avg 0.0 max 0'
+  # 真实快照的耗时取决于秒边界, 只检查格式; 精确值由固定日志的测试验证。
+  assert_line -n 5 --regexp '^seconds      avg [0-9]+\.[0-9] max [0-9]+$'
   # bats 的 lines 不含空行, 所以表头是第 6 行而不是第 7 行。
   assert_line -n 6 'DAY         SNAPSHOTS  BYTES'
   assert_line -n 7 --regexp '^2026-10-30 +1 +49$'
