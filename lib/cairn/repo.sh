@@ -113,7 +113,7 @@ cairn::repo::latest() {
 #   0 on success, 1 if du or numfmt fails.
 #######################################
 cairn::repo::sizes() {
-  local -a dirs
+  local -a dirs=()
   local name
   while IFS= read -r name; do
     dirs+=("$1/snapshots/${name}")

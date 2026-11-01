@@ -1,0 +1,18 @@
+# 故意写得难看的脚本: 只给 shfmt 看, 不运行。
+greet(){
+    local name="$1"
+    if [[ -n "$name" ]]
+    then
+        echo "hello, $name"
+    else
+        echo "hello"
+    fi
+    case "$name" in
+        root) echo admin;;
+        *) echo user;;
+    esac
+    cat file \
+        | sort \
+        | uniq
+}
+greet "$@"

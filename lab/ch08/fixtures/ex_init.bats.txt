@@ -1,0 +1,30 @@
+# cairn init 的幂等性: 第二次运行不改变任何东西。
+# 由 lab/ch08/ex_init_test.sh 复制到 $LAB_TMP 后用 bats 运行。
+
+load "${CAIRN_ROOT}/tests/test_helper"
+
+@test "init twice: the second run reports and changes nothing" {
+  local dir="${BATS_TEST_TMPDIR}/again"
+  run "${CAIRN}" init "${dir}"
+  assert_success
+  # 在仓库里放一个标记文件, 再记下配置和标记文件的状态。
+  touch "${dir}/snapshots/marker"
+  local config_before marker_before
+  config_before="$(sha256sum <"${CAIRN_CONFIG}")"
+  marker_before="$(stat -c '%i %Y' "${dir}/snapshots/marker")"
+
+  run "${CAIRN}" init "${dir}"
+  assert_success
+  assert_output "cairn: ${dir} is already a cairn repository"
+  assert_file_exist "${dir}/snapshots/marker"
+  assert_equal "$(stat -c '%i %Y' "${dir}/snapshots/marker")" \
+    "${marker_before}"
+  assert_equal "$(sha256sum <"${CAIRN_CONFIG}")" "${config_before}"
+  assert_equal "$(<"${dir}/cairn.repo")" 'cairn-repo 1'
+}
+
+@test "init -q stays silent when the repository already exists" {
+  run "${CAIRN}" -q init "${REPO}"
+  assert_success
+  assert_output ''
+}

@@ -31,6 +31,8 @@ bin/cairn           the executable
 lib/cairn/*.sh     libraries sourced by bin/cairn (log, config, repo, snapshot, manifest, prune, lock)
 lib/cairn/*.awk    awk programs run with awk -f (report.awk for `cairn report`, diff.awk for `cairn diff`)
 scripts/           chapter runner (chapter.sh), fixture generator (make_tree.sh)
+tests/            bats suite (`*.bats`) and its helper (test_helper.bash)
+contrib/systemd/  user units: cairn.service and cairn.timer (daily snapshot and prune)
 lab/chNN/          small lab scripts, one directory per chapter
 ```
 
@@ -51,7 +53,9 @@ hyperfine, strace and the other tools of the series.
 nix develop
 make ch01      # run the labs of one chapter
 make lint      # shellcheck + shfmt
-make ci        # lint + every chapter
+make test      # bats suite, one job per CPU (needs GNU parallel)
+make coverage  # kcov line coverage of bin/ and lib/ into out/coverage
+make ci        # lint + every chapter + test
 ```
 
 ## License

@@ -1,0 +1,7 @@
+[Unit]
+Description=Cairn snapshot and prune
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/cairn snapshot
+ExecStart=%h/.local/bin/cairn prune

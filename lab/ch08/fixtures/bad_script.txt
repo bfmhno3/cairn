@@ -1,0 +1,11 @@
+# 故意写坏的脚本: 只给 ShellCheck 看, 不运行。
+backup() {
+  dir=$1
+  cd $dir
+  local stamp=$(date +%F)
+  echo "backup at $stamp"
+  for f in $(ls $dir); do
+    echo "copy $f at `date`"
+  done
+}
+backup "$@"

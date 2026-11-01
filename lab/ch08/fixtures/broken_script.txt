@@ -1,0 +1,7 @@
+# 故意写坏的脚本: 缺少 fi, 只给 bash -n 看, 不运行。
+count_files() {
+  local dir="$1"
+  if [[ -d "${dir}" ]]; then
+    find "${dir}" -type f | wc -l
+}
+count_files "$1"
