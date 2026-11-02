@@ -8,7 +8,7 @@
 # Prints the median in ms per variant and the ratio to the empty .bashrc.
 bc="${CAIRN_BASH_COMPLETION:-}"
 if [[ -z "${bc}" ]]; then
-  # 不在 nix develop 里时, 从 /etc/bashrc 里找系统用的那份 bash-completion。
+  # 不在 nix develop 里时，从 /etc/bashrc 里找系统用的那份 bash-completion。
   profile_d="$(grep -o '/nix/store/[^"]*bash-completion[^"]*/etc/profile.d' \
     /etc/bashrc 2>/dev/null | head -n 1)"
   bc="${profile_d%/etc/profile.d}/share/bash-completion/bash_completion"

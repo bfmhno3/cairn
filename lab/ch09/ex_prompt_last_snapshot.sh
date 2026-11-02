@@ -42,7 +42,7 @@ cairn_prompt() {
   fi
 }
 
-# 单引号: $(...) 要在每次显示提示符时才运行。
+# 单引号：$(...) 要在每次显示提示符时才运行。
 PS1='$(cairn_prompt "${repo}") \$ '
 echo "PS1 is: ${PS1}"
 echo "empty repository:      ${PS1@P}"

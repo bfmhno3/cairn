@@ -4,11 +4,14 @@
 # interactive bash fed from a here-string records the commands it reads
 # and writes them to HISTFILE when it exits. Part 3: HISTTIMEFORMAT on a
 # history file that carries "#<epoch>" lines, with TZ=UTC so the output
-# is the same everywhere. HISTFILE always lives in $LAB_TMP.
+# is the same everywhere. HISTFILE always lives in $LAB_TMP. The
+# interactive bash of part 2 runs under setsid(1): without a controlling
+# terminal the output is the same whether or not the lab is started from
+# a terminal.
 echo '--- 1: history -s and HISTCONTROL=ignoreboth ---'
-# -c 字符串每读入一行就记一条; history -s 先删掉历史里最后一条 (正是它
-# 自己所在的那一行), 再加参数。第一条 HISTCONTROL=ignoreboth 在设置生效
-# 前读入, 所以留下; 重复的和以空格开头的参数不记; 最后一条是 history。
+# -c 字符串每读入一行就记一条；history -s 先删掉历史里最后一条（正是它
+# 自己所在的那一行），再加参数。第一条 HISTCONTROL=ignoreboth 在设置生效
+# 前读入，所以留下；重复的和以空格开头的参数不记；最后一条是 history。
 bash --norc -c 'set -o history
 HISTCONTROL=ignoreboth
 history -s "echo one"
@@ -26,7 +29,7 @@ histfile="${LAB_TMP}/hist2"
   echo " echo hidden by a leading space"
   echo "echo two"
   echo "history"
-} | HISTFILE="${histfile}" PS1='$ ' bash --norc -i 2>&1 \
+} | HISTFILE="${histfile}" PS1='$ ' setsid --wait bash --norc -i 2>&1 \
   | grep -v -e '^bash: cannot set terminal' -e '^bash: no job control'
 echo '--- the file after exit ---'
 cat "${histfile}"

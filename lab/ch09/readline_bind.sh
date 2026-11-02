@@ -1,11 +1,15 @@
 # shellcheck shell=bash
 # Shows: readline's key bindings, counted and listed with `bind -p` in an
-# interactive bash (readline is only active for interactive shells, `bash
-# -c 'bind -p'` prints nothing). The count depends on /etc/inputrc and on
-# the readline version; HOME is a fake directory, so ~/.inputrc is mine:
-# first none, then one that rebinds the up arrow. Readline reads
-# $INPUTRC, else ~/.inputrc, else /etc/inputrc: a ~/.inputrc replaces the
-# system file, which is why the count changes in the last step.
+# interactive bash. Readline is only active in interactive shells: `bash
+# -c 'bind -p'` still prints the table (about 500 lines) but warns "bind:
+# warning: line editing not enabled" on stderr. The interactive bash runs
+# under setsid(1): without a controlling terminal the output is the same
+# whether or not the lab is started from a terminal. The count depends on
+# /etc/inputrc and on the readline version; HOME is a fake directory, so
+# ~/.inputrc is mine: first none, then one that rebinds the up arrow.
+# Readline reads $INPUTRC, else ~/.inputrc, else /etc/inputrc: a
+# ~/.inputrc replaces the system file, which is why the count changes in
+# the last step.
 home="${LAB_TMP}/home"
 mkdir "${home}" || exit 1
 
@@ -15,7 +19,8 @@ mkdir "${home}" || exit 1
 #   The bind command line, one string.
 #######################################
 bind_in_bash() {
-  env -u INPUTRC HOME="${home}" bash --norc -i -c "$1" 2>/dev/null
+  env -u INPUTRC HOME="${home}" setsid --wait bash --norc -i -c "$1" \
+    2>/dev/null
 }
 
 echo '--- how many lines does bind -p print? ---'
@@ -36,7 +41,7 @@ bind_in_bash 'bind -q reverse-search-history; bind -q clear-screen'
 
 echo '--- the same lines with ~/.inputrc ---'
 cat >"${home}/.inputrc" <<'INPUTRC'
-# 上箭头改成按已输入的前缀搜索历史; 关掉响铃。
+# 上箭头改成按已输入的前缀搜索历史；关掉响铃。
 "\e[A": history-search-backward
 set bell-style none
 INPUTRC

@@ -33,8 +33,8 @@ run_mode() {
     shift
   done
   local out
-  # BASH_ENV 和 ENV 取自调用者的环境, 先去掉, 免得污染结果。
-  # grep 只留下文件打印的行: NixOS 的退出脚本还会输出终端标题序列。
+  # BASH_ENV 和 ENV 取自调用者的环境，先去掉，免得污染结果。
+  # grep 只留下文件打印的行：NixOS 的退出脚本还会输出终端标题序列。
   out="$(env -u BASH_ENV -u ENV HOME="${home}" "${vars[@]}" \
     setsid --wait "$@" 2>>"${errors}" </dev/null | grep -a '^read ')"
   printf '%-48s %s\n' "${label}" "${out//$'\n'/, }"
@@ -51,7 +51,7 @@ run_mode "BASH_ENV=\$HOME/.bashrc bash -c :" \
 run_mode 'bash --noprofile --norc -i -c :' \
   bash --noprofile --norc -i -c :
 run_mode 'bash -l -i -c :' bash -l -i -c :
-# .bash_logout 只在登录 shell 退出时读; 用 exit 退出才会走到, -c : 不会。
+# .bash_logout 只在登录 shell 退出时读；用 exit 退出才会走到，-c : 不会。
 run_mode 'bash -l -c exit' bash -l -c exit
 
 echo '--- login shell without .bash_profile: .profile is the fallback ---'
@@ -70,7 +70,7 @@ run_mode 'bash -l -i -c :' bash -l -i -c :
 run_mode 'bash -i -c :' bash -i -c :
 
 echo '--- the real trace of bash -l -x -c : (file names masked) ---'
-# 前几行来自系统的 /etc/profile 和 /etc/bashrc (NixOS 上有), 只留下载入
+# 前几行来自系统的 /etc/profile 和 /etc/bashrc （NixOS 上有），只留下载入
 # 启动文件的那几行。
 env -u BASH_ENV -u ENV HOME="${home}" PS4='+ ' setsid --wait \
   bash -l -x -c : 2>&1 </dev/null \

@@ -39,7 +39,7 @@ tab() {
   COMP_CWORD=$(($# - 1))
   _cairn
   local got
-  # compgen -f 按目录顺序列出, 排序后输出才稳定。
+  # compgen -f 按目录顺序列出，排序后输出才稳定。
   got="$(printf '%s\n' "${COMPREPLY[@]}" | LC_ALL=C sort | paste -sd ' ')"
   printf '%-34s -> %s\n' "$*<TAB>" "${got}"
   if [[ "${got}" != "${expected}" ]]; then

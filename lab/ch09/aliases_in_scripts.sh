@@ -33,7 +33,7 @@ alias say='echo hello'
 say
 SCRIPT
 
-# 同一行: bash 先读完整行再执行, 执行 alias 时这一行已经解析过了。
+# 同一行：bash 先读完整行再执行，执行 alias 时这一行已经解析过了。
 run_script 'expand_aliases, alias defined and used on one line' s3.sh <<'SCRIPT'
 shopt -s expand_aliases
 alias say='echo hello'; say

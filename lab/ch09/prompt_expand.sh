@@ -3,7 +3,9 @@
 # expansion on a script's variable, so it can be inspected without a
 # terminal. Then an interactive bash fed from a here-string prints PS1,
 # PS0 and PROMPT_COMMAND at the places where a terminal would show them,
-# and PS4 prefixes the lines of `set -x`.
+# and PS4 prefixes the lines of `set -x`. That interactive bash runs
+# under setsid(1): without a controlling terminal the output is the same
+# whether or not the lab is started from a terminal.
 # User and host name are replaced by USER and HOST in the output.
 home="${LAB_TMP}/home"
 mkdir -p "${home}/src" || exit 1
@@ -33,7 +35,7 @@ echo "PS1 is: ${PS1}"
 echo "${PS1@P}"
 
 echo '--- PS0, PS1 and PROMPT_COMMAND in an interactive bash ---'
-# 提示符写在 stderr, 所以合并两个输出; 去掉没有终端时的作业控制警告。
+# 提示符写在 stderr，所以合并两个输出；去掉没有终端时的作业控制警告。
 {
   cat <<'COMMANDS'
 PS1='ps1> '
@@ -42,8 +44,8 @@ PROMPT_COMMAND='echo "[prompt_command]"'
 echo first
 echo second
 COMMANDS
-} | bash --norc -i 2>&1 | grep -v -e '^bash: cannot set terminal' \
-  -e '^bash: no job control'
+} | setsid --wait bash --norc -i 2>&1 \
+  | grep -v -e '^bash: cannot set terminal' -e '^bash: no job control'
 echo
 
 echo '--- PS4 with set -x ---'
