@@ -87,7 +87,9 @@ Make sure `<prefix>/bin` is on `PATH`. The systemd units expect `cairn` at `~/.l
 `share/cairn/systemd/` to `~/.config/systemd/user/` and edit `ExecStart` if you chose another prefix.
 
 To uninstall, run the same command with `--uninstall` (and the same `--prefix`/`DESTDIR`): it removes exactly the files
-listed above, then the directories it created if they are empty. Files you added yourself are left alone.
+listed above, then removes the directories `bin`, `lib/cairn`, `lib`, `share/cairn/systemd`, `share/cairn`,
+`share/bash-completion/completions`, `share/bash-completion` and `share` below the prefix if they are now empty,
+including ones that existed before. Files you added yourself are left alone.
 
 ```bash
 ./install.sh --prefix /opt/cairn --uninstall

@@ -27,7 +27,7 @@ readonly CREATED_DIRS='
 '
 
 # Parsed from the command line by main; used by the helpers below.
-PREFIX="${HOME:-}/.local"
+PREFIX=
 UNINSTALL=0
 
 #######################################
@@ -43,8 +43,11 @@ Install cairn under DIR (default: $HOME/.local).
 
 Options:
   --prefix DIR  install under DIR instead of $HOME/.local
-  --uninstall   remove what install.sh installed, and the empty
-                directories it created
+  --uninstall   remove the files install.sh installed, then remove
+                bin, lib/cairn, lib, share/cairn/systemd, share/cairn,
+                share/bash-completion/completions,
+                share/bash-completion and share (below DIR) if they
+                are now empty, even if they existed before
   -h            show this help and exit
 
 If DESTDIR is set, every path is placed below it (for packaging).
@@ -129,7 +132,8 @@ remove_file() (
 )
 
 #######################################
-# Remove the directories install created, but only the empty ones.
+# Remove the directories install uses, but only the empty ones, whoever
+# created them.
 # Globals:
 #   ROOT, CREATED_DIRS
 #######################################
@@ -181,7 +185,8 @@ parse_args() {
 #######################################
 # Install or uninstall cairn.
 # Globals:
-#   PREFIX, UNINSTALL, DESTDIR (optional), ROOT (set here)
+#   PREFIX, UNINSTALL, DESTDIR (optional), ROOT (set here),
+#   status (set here), src_dir (set here)
 # Arguments:
 #   The command line.
 # Returns:
@@ -195,6 +200,14 @@ main() {
     10) return 0 ;;
     *) return "${status}" ;;
   esac
+
+  if [ -z "${PREFIX}" ]; then
+    if [ -z "${HOME:-}" ]; then
+      err 'HOME is not set; use --prefix DIR'
+      return 2
+    fi
+    PREFIX="${HOME}/.local"
+  fi
 
   # 去掉末尾的斜杠, 避免路径里出现 //; 前缀 "/" 因此得到空串, 路径照样成立。
   ROOT="${DESTDIR:-}"

@@ -1,6 +1,6 @@
 #!/bin/sh
 # One bashism per line, each line works on its own under bash; the name
-# after the last "#" is what lab/ch10 prints. Not linted: see README.
+# after the last "#" is what lab/ch10 prints. Not linted.
 [[ abc == a* ]] && echo match # [[ ]]
 arr=(x y z); echo "${arr[1]}" # array
 echo $'a\tb' # $'..'

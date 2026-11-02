@@ -250,7 +250,8 @@ count_files() {
 @test "an unknown option is a usage error, exit 2" {
   run_installer dash -- --bogus
   assert_failure 2
-  assert_equal "${stderr_lines[0]}" "install.sh: error: unknown option '--bogus'"
+  assert_equal "${stderr_lines[0]}" \
+    "install.sh: error: unknown option '--bogus'"
   assert_equal "${stderr_lines[1]}" \
     "install.sh: error: run 'install.sh -h' for usage"
 }
@@ -265,6 +266,50 @@ count_files() {
 @test "--prefix with an empty value is a usage error, exit 2" {
   run_installer dash -- --prefix ''
   assert_failure 2
+}
+
+@test "HOME unset and no --prefix is a usage error, exit 2" {
+  local dest="${BATS_TEST_TMPDIR}/dest"
+  DESTDIR="${dest}" run_installer env -u HOME dash --
+  assert_failure 2
+  assert_equal "${stderr}" \
+    'install.sh: error: HOME is not set; use --prefix DIR'
+  assert_not_exist "${dest}"
+  assert_equal "${output}" ''
+}
+
+@test "HOME empty and no --prefix is a usage error, exit 2" {
+  local dest="${BATS_TEST_TMPDIR}/dest"
+  HOME='' DESTDIR="${dest}" run_installer dash --
+  assert_failure 2
+  assert_not_exist "${dest}"
+}
+
+@test "HOME unset is fine when --prefix is given" {
+  run_installer env -u HOME dash -- --prefix "${PREFIX_DIR}"
+  assert_success
+  assert_installed "${PREFIX_DIR}"
+}
+
+@test "a missing source file is an error, exit 1" {
+  local tree="${BATS_TEST_TMPDIR}/tree" d
+  mkdir -- "${tree}"
+  cp -- "${INSTALL}" "${tree}/install.sh"
+  for d in bin lib completions contrib; do
+    cp -R -- "${CAIRN_ROOT}/${d}" "${tree}/${d}"
+  done
+  rm -- "${tree}/completions/cairn.bash"
+  run --separate-stderr dash "${tree}/install.sh" --prefix "${PREFIX_DIR}"
+  assert_failure 1
+  assert_equal "${stderr}" \
+    "install.sh: error: missing source file ${tree}/completions/cairn.bash"
+}
+
+@test "--uninstall removes a pre-existing empty bin directory" {
+  mkdir -p -- "${PREFIX_DIR}/bin"
+  run_installer dash -- --prefix "${PREFIX_DIR}" --uninstall
+  assert_success
+  assert_not_exist "${PREFIX_DIR}/bin"
 }
 
 @test "a usage error installs nothing" {
