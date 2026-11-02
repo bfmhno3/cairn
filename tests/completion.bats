@@ -10,7 +10,7 @@ setup() {
   common_setup
   # shellcheck source=../completions/cairn.bash
   source "${CAIRN_ROOT}/completions/cairn.bash"
-  # 文件补全看当前目录: 用一个空的子目录, 不受测试夹具影响。
+  # 文件补全看当前目录：用一个空的子目录，不受测试夹具影响。
   mkdir -- "${BATS_TEST_TMPDIR}/work"
   cd -- "${BATS_TEST_TMPDIR}/work" || return
 }
@@ -139,6 +139,59 @@ sorted_reply() {
   assert_equal "$(<"${BATS_TEST_TMPDIR}/stub_args")" '-c my.conf list'
   complete_words cairn --config = my2.conf verify ''
   assert_equal "$(<"${BATS_TEST_TMPDIR}/stub_args")" '-c my2.conf list'
+}
+
+@test "no -c: cairn list is called without extra arguments" {
+  stub_cairn
+  complete_words cairn verify ''
+  assert_equal "$(<"${BATS_TEST_TMPDIR}/stub_args")" list
+}
+
+@test "the last -c wins when it is given twice" {
+  stub_cairn
+  complete_words cairn -c first.conf -c second.conf verify ''
+  assert_equal "$(<"${BATS_TEST_TMPDIR}/stub_args")" '-c second.conf list'
+}
+
+@test "-- ends the options: the next word is the command" {
+  stub_cairn
+  complete_words cairn -c my.conf -- verify 20261031
+  assert_equal "${COMPREPLY[*]}" 20261031T090000Z
+  assert_equal "$(<"${BATS_TEST_TMPDIR}/stub_args")" '-c my.conf list'
+  complete_words cairn -- list ''
+  assert_equal "${#COMPREPLY[@]}" 0
+}
+
+# 单引号是故意的: 名字里的 $(...) 和反引号必须原样留着。cairn 是被
+# _cairn 间接调用的桩函数。
+# shellcheck disable=SC2016,SC2329
+@test "snapshot names are data: nothing in them is expanded or run" {
+  cairn() {
+    printf 'NAME\n'
+    printf '%s\n' '$(touch${IFS}SENTINEL)' '`touch SENTINEL`' \
+      '$(touch SENTINEL)' 'plain'
+  }
+  complete_words cairn verify ''
+  assert_equal "${#COMPREPLY[@]}" 4
+  assert_equal "${COMPREPLY[0]}" '$(touch${IFS}SENTINEL)'
+  complete_words cairn verify '$(touch$'
+  assert_equal "${COMPREPLY[*]}" '$(touch${IFS}SENTINEL)'
+  complete_words cairn verify pl
+  assert_equal "${COMPREPLY[*]}" plain
+  assert_not_exist SENTINEL
+}
+
+@test "cairn not on PATH: no completions, no output, status 0" {
+  mkdir -- "${BATS_TEST_TMPDIR}/empty"
+  # shellcheck disable=SC2123
+  PATH="${BATS_TEST_TMPDIR}/empty"
+  local status=0
+  complete_words cairn verify '' >"${BATS_TEST_TMPDIR}/out" \
+    2>"${BATS_TEST_TMPDIR}/err" || status=$?
+  assert_equal "${status}" 0
+  assert_equal "${#COMPREPLY[@]}" 0
+  assert_equal "$(<"${BATS_TEST_TMPDIR}/out")" ''
+  assert_equal "$(<"${BATS_TEST_TMPDIR}/err")" ''
 }
 
 @test "cairn list failing leaves COMPREPLY empty" {

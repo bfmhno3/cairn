@@ -24,9 +24,32 @@ _cairn_snapshot_names() {
   local -a lines
   readarray -t lines < <("${cmd[@]}" 2>/dev/null)
   local i
-  # 第 0 行是表头 (NAME FILES SIZE), 跳过; 每行第一列是快照名。
+  # 第 0 行是表头 (NAME FILES SIZE)，跳过；每行第一列是快照名。
+  # 名字按空白切下第一列：名字里带空格的快照不会整个补全出来，
+  # 但补全也不会因此出错。
   for ((i = 1; i < ${#lines[@]}; i++)); do
     printf '%s\n' "${lines[i]%% *}"
+  done
+}
+
+#######################################
+# Fill COMPREPLY with the snapshot names that start with a prefix.
+# The names come from the repository, so they are data: they are compared
+# in a loop, never expanded (compgen -W would expand a name such as
+# $(cmd) when TAB is pressed).
+# Globals:
+#   COMPREPLY
+# Arguments:
+#   The prefix, then the names.
+#######################################
+_cairn_reply_names() {
+  local prefix="$1" name
+  shift
+  COMPREPLY=()
+  for name in "$@"; do
+    if [[ "${name}" == "${prefix}"* ]]; then
+      COMPREPLY+=("${name}")
+    fi
   done
 }
 
@@ -63,7 +86,7 @@ _cairn() {
     return 0
   fi
 
-  # 找命令词和它之后的参数个数; -c/--config 的值要跳过, 并记下配置文件。
+  # 找命令词和它之后的参数个数；-c/--config 的值要跳过，并记下配置文件。
   local config='' command='' word
   local -i nargs=0 i
   for ((i = 1; i < COMP_CWORD; i++)); do
@@ -101,13 +124,13 @@ _cairn() {
     verify)
       if ((nargs < 1)); then
         readarray -t names < <(_cairn_snapshot_names "${config}")
-        readarray -t COMPREPLY < <(compgen -W "${names[*]}" -- "${cur}")
+        _cairn_reply_names "${cur}" "${names[@]}"
       fi
       ;;
     diff)
       if ((nargs < 2)); then
         readarray -t names < <(_cairn_snapshot_names "${config}")
-        readarray -t COMPREPLY < <(compgen -W "${names[*]}" -- "${cur}")
+        _cairn_reply_names "${cur}" "${names[@]}"
       fi
       ;;
     *) ;;
