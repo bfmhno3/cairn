@@ -28,6 +28,7 @@ The posts live at <https://bfmhno3.github.io>.
 
 ```text
 bin/cairn           the executable
+install.sh         POSIX sh installer (chapter 10)
 lib/cairn/*.sh     libraries sourced by bin/cairn (log, config, repo, snapshot, manifest, prune, lock)
 lib/cairn/*.awk    awk programs run with awk -f (report.awk for `cairn report`, diff.awk for `cairn diff`)
 completions/      bash completion for cairn (cairn.bash)
@@ -56,8 +57,44 @@ make ch01      # run the labs of one chapter
 make lint      # shellcheck + shfmt
 make test      # bats suite, one job per CPU (needs GNU parallel)
 make coverage  # kcov line coverage of bin/ and lib/ into out/coverage
+make install   # ./install.sh --prefix "$HOME/.local" (PREFIX=DIR to change it)
 make ci        # lint + every chapter + test
 ```
+
+## Install
+
+`install.sh` is plain POSIX `sh`: it runs under dash, busybox sh, yash, mksh and `bash --posix`, so it needs no
+bash to start (cairn itself does need bash 5.x on `PATH`; the installer warns when it cannot find one).
+
+```bash
+./install.sh                          # into ~/.local
+./install.sh --prefix /opt/cairn      # into another prefix
+DESTDIR=/tmp/stage ./install.sh --prefix /usr   # staging for a package
+make install PREFIX=/opt/cairn        # the same through make, inside nix develop
+```
+
+It installs these files below the prefix:
+
+| From | To | Mode |
+| --- | --- | --- |
+| `bin/cairn` | `bin/cairn` | 0755 |
+| `lib/cairn/*` | `lib/cairn/` | 0644 |
+| `completions/cairn.bash` | `share/bash-completion/completions/cairn` | 0644 |
+| `contrib/systemd/*` | `share/cairn/systemd/` | 0644 |
+
+`bin/cairn` finds its libraries at `../lib/cairn` relative to itself, so the installed layout needs no extra setting.
+Make sure `<prefix>/bin` is on `PATH`. The systemd units expect `cairn` at `~/.local/bin`: copy them from
+`share/cairn/systemd/` to `~/.config/systemd/user/` and edit `ExecStart` if you chose another prefix.
+
+To uninstall, run the same command with `--uninstall` (and the same `--prefix`/`DESTDIR`): it removes exactly the files
+listed above, then the directories it created if they are empty. Files you added yourself are left alone.
+
+```bash
+./install.sh --prefix /opt/cairn --uninstall
+```
+
+Check what is installed: `cairn --version` prints `cairn 0.1.0`. The tests are in `tests/install.bats`; they install
+only into a temporary directory.
 
 ## Shell completion
 
@@ -77,7 +114,9 @@ mkdir -p ~/.local/share/bash-completion/completions
 ln -s /path/to/cairn/completions/cairn.bash ~/.local/share/bash-completion/completions/cairn
 ```
 
-`cairn` has to be on `PATH` for the snapshot names to work. The tests are in `tests/completion.bats`.
+`install.sh` puts the file at `<prefix>/share/bash-completion/completions/cairn`, where bash-completion looks for it
+when `<prefix>/share` is in its search path (`~/.local/share` is). `cairn` has to be on `PATH` for the snapshot names
+to work. The tests are in `tests/completion.bats`.
 
 ## License
 
